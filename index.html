@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Forex Charts</title>
+    <script src="p5.js"></script>
+</head>
+<body>
+
+</body>
+<script>
+
+    class ElasticChart{
+        constructor(){
+            console.log("is created");
+
+            //Init components
+            this.colors = this.defaultColors;
+            this.sizes = this.defaultSizes;
+
+            /*Some validations need to be done here*/
+            this.data = [];
+            this.ChartsToDraw = [];
+            this.currency = "";
+           // this.NewPoints = {x:0,y:0}
+            //console.log(this);
+        }
+        run(){
+            if(frameCount%120==0)
+            this.AJAXcall();
+
+            this.display();
+        }
+        display(){
+
+            push();
+            fill(this.colors.background);
+            stroke(this.colors.ChartStroke);
+            strokeWeight(this.sizes.Chart.strokeWeight);
+            let [x,y,w,h] = this.ChartSizes;
+            rect(x,y,w,h);
+            pop();
+
+            for (let chart in this.ChartsToDraw){
+                if(this.ChartsToDraw[chart].type !=undefined && this.ChartsToDraw[chart].dataPath!=undefined)
+                    this['draw'+this.ChartsToDraw[chart].type](this.ChartsToDraw[chart].dataPath);
+
+            }
+        }
+        get defaultColors(){
+           // console.log(this);
+            return {
+                background: color(100, 100, 105), ChartStroke: 1,
+                PlotChart: {stroke: color(80,200,200)}
+            }
+        }
+        get defaultSizes(){
+            return{
+                Chart: {width: width, height: height/2,x:0,y:0, strokeWeight:2},
+                PlotChart: {strokeWeight: 4}
+            }
+        }
+        get ChartSizes(){
+            return [this.sizes.Chart.x,this.sizes.Chart.y,this.sizes.Chart.width,this.sizes.Chart.height];
+        }
+        get CurrencyData(){
+
+        }
+        set NewData(XMLfile){
+            this.data.push(XMLfile)
+        }
+        drawPLotChart(dataPath){
+            var base = this.ChartSizes[1]+this.ChartSizes[3]-40;
+            push();
+            strokeWeight(this.sizes.PlotChart.strokeWeight);
+            fill(this.colors.PlotChart.stroke);
+            stroke(this.colors.PlotChart.stroke);
+            for(let i=0;i<this.data.length;i++){
+                var currentData = this.data[i];
+                var currTime = currentData.responseText.GetTime;
+                var path=[];
+                var coordX=i*5,coordY;
+                //x:this.ChartSizes[0]+ new Date(currTime).getSeconds(),
+                if(dataPath instanceof Array){
+                    coordY=base - parseFloat(currentData.responseText[dataPath[0]][dataPath[1]][dataPath[2]])*10000 +10500
+                }
+                else throw 'dataPath must be Array';
+                //console.log(coord.y);
+                point(coordX,coordY);
+                //rect(x,y,12,12);
+                // rect(x,123,70,40);
+            }
+            pop();
+        }
+        drawLineChart(dataPath){
+            var base = this.ChartSizes[1]+this.ChartSizes[3]-40;
+            push();
+            strokeWeight(this.sizes.PlotChart.strokeWeight);
+            fill(this.colors.PlotChart.stroke);
+            stroke(this.colors.PlotChart.stroke);
+            for(let i=0;i<this.data.length;i++){
+                var currentData = this.data[i];
+                var currTime = currentData.responseText.GetTime;
+                var path=[];
+                var coordX=i*5,coordY;
+                //x:this.ChartSizes[0]+ new Date(currTime).getSeconds(),
+                if(dataPath instanceof Array){
+                    coordY=base - parseFloat(currentData.responseText[dataPath[0]][dataPath[1]][dataPath[2]])*10000 +10500
+                }
+                else throw 'dataPath must be Array';
+                //console.log(coord.y);
+                line(coordX,coordY,coordX,base);
+                //rect(x,y,12,12);
+                // rect(x,123,70,40);
+            }
+            pop();
+        }
+        updateCharts(){
+           // console.log(this.data)
+            var currentData = this.data[this.data.length-1];
+            this.currency= currentData.responseText.Rate[4]['@attributes'].Symbol;
+        }
+        AJAXcall(url='http://rates.fxcm.com/RatesXML'){
+         var thisElasticChart = this;
+         //console.log(thisElasticChart);
+           var  response;
+            // Create a connection to the file.
+            var Connect = new XMLHttpRequest();
+            // Define which file to open and
+            // send the request.
+           Connect.open("POST", "server.php");
+           Connect.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+
+           Connect.onreadystatechange=function () {
+               //console.log(this);
+               if (this.readyState == 4 && this.status == 200) {
+                   response={responseText: JSON.parse(this.responseText), responseXML :  this.responseXML}
+                   thisElasticChart.data.push(response)
+                   thisElasticChart.updateCharts();
+               }
+               else{ response={statusText: this.statusText,status: this.status}; /*console.log(response);*/}
+
+               /*Some validations will be added here since async can change oreder of requests*/
+
+           };
+            //console.log(Connect.onreadystatechange);
+           Connect.send("Requested_Site="+url);
+        }
+    }
+    var myChart;
+
+    function setup() {
+        createCanvas(800, 800);
+
+        myChart = new ElasticChart();
+        myChart.ChartsToDraw[0] = {type: 'LineChart', dataPath: ['Rate',4,'Bid']}
+    }
+
+    function draw(){
+        background(20);
+        myChart.run();
+
+        push()
+        fill('red')
+        rect(20,50,30,50);
+        pop()
+
+
+
+    }
+
+    function mousePressed() {
+        myChart.AJAXcall();
+        //console.log(k)
+    }
+</script>
+</html>

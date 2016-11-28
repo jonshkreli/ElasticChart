@@ -18,14 +18,23 @@
             this.colors = this.defaultColors;
             this.sizes = this.defaultSizes;
 
+            this.colors.extra = [];
+
+            for(let i=0;i<20;i++) this.colors.extra.push(color(random(0,255),random(0,255),random(0,255)))
+
             /*Some validations need to be done here*/
-            this.data = [];
+            this.data = {
+                AJAX: [], given: []
+            };
             this.ChartsToDraw = [];
             this.currency = "";
+
            // this.NewPoints = {x:0,y:0}
             //console.log(this);
         }
         run(){
+            this.sizes.Chart.height = height/this.ChartsToDraw.length;
+
             if(frameCount%120==0)
             this.AJAXcall();
 
@@ -38,12 +47,36 @@
             stroke(this.colors.ChartStroke);
             strokeWeight(this.sizes.Chart.strokeWeight);
             let [x,y,w,h] = this.ChartSizes;
-            rect(x,y,w,h);
+            //rect(x,y,w,h*this.ChartsToDraw.length);
             pop();
 
-            for (let chart in this.ChartsToDraw){
-                if(this.ChartsToDraw[chart].type !=undefined && this.ChartsToDraw[chart].dataPath!=undefined)
-                    this['draw'+this.ChartsToDraw[chart].type](this.ChartsToDraw[chart].dataPath);
+            var basePosition=this.ChartSizes[1]+this.ChartSizes[3]-40;
+            //if(this.data.length>0)
+            for (let chart=0;chart< this.ChartsToDraw.length;chart++){
+                let ChartToDraw=this.ChartsToDraw[chart];
+
+                if(ChartToDraw.type !=undefined && ChartToDraw.dataPaths!=undefined){
+                    if(ChartToDraw.dataPaths instanceof Array == false ||  typeof ChartToDraw.dataPaths != "object") throw 'ChartToDraw.dataPaths must be Array';
+
+                    push()
+                    fill(this.colors.extra[chart+5]);
+                    {
+                        let [x,y,w,h] = this.ChartSizes;
+
+                        rect(x,y+(chart)*h,w,h);
+                    }
+                    pop()
+
+                    let i=0;
+                    for(let dataPath of ChartToDraw.dataPaths){
+                        ChartToDraw.extra.strokeColor = this.colors.extra[i];
+                        ChartToDraw.extra.phi = i*2;
+                        ChartToDraw.extra.count = chart;
+                        this['draw'+this.ChartsToDraw[chart].type](dataPath,
+                                basePosition+this.ChartSizes[3]*chart, ChartToDraw.extra);
+                        i++;
+                    }
+                }
 
             }
         }
@@ -57,7 +90,8 @@
         get defaultSizes(){
             return{
                 Chart: {width: width, height: height/2,x:0,y:0, strokeWeight:2},
-                PlotChart: {strokeWeight: 4}
+                PlotChart: {strokeWeight: 1, leftPadding: 20, rightPadding: 20, width: width},
+                LineChart: {strokeWeight: 1, leftPadding: 20, rightPadding: 20}
             }
         }
         get ChartSizes(){
@@ -69,45 +103,85 @@
         set NewData(XMLfile){
             this.data.push(XMLfile)
         }
-        drawPLotChart(dataPath){
-            var base = this.ChartSizes[1]+this.ChartSizes[3]-40;
+        calculate(ThingToCalculate, Arguments){
+
+            if(typeof ThingToCalculate!=='string') throw "ThingToCalculate must be a string";
+
+    if(ThingToCalculate=="MinMax"){
+        let lastY = Arguments.lastY, extra = Arguments.extra;
+        if(lastY>extra.max) extra.max=lastY;
+        if(extra.min==0) extra.min=lastY;
+        if(lastY<extra.min) extra.min=lastY;
+        return extra;
+    }else if(ThingToCalculate=="CalcY"){
+        let extra = Arguments.extra, coordY = Arguments.coordY,base = Arguments.base;
+        var coordY_To_MAX = (coordY-extra.min)/(extra.max-extra.min);
+        coordY=lerp(base+80-this.ChartSizes[3],base,coordY_To_MAX);
+return coordY;
+    }
+
+        }
+        drawPlotChart(dataPath,base,extra){
+            if(dataPath instanceof Array == false ||  typeof dataPath != "object") throw 'dataPath must be Array';
+            if(frameCount%120==0) console.log("base "+base)
+            if(this.data[dataPath[0]].length==0) return;
+
+            var lastY = parseFloat(this.data[dataPath[0]][this.data[dataPath[0]].length-1][dataPath[1]][dataPath[2]][dataPath[3]][dataPath[4]]) //* 1000000;
+            extra= this.calculate("MinMax",{extra:extra,lastY:lastY});
+
             push();
-            strokeWeight(this.sizes.PlotChart.strokeWeight);
-            fill(this.colors.PlotChart.stroke);
-            stroke(this.colors.PlotChart.stroke);
-            for(let i=0;i<this.data.length;i++){
-                var currentData = this.data[i];
+            strokeWeight(2);
+           // fill(color(random(0,255),random(0,255),random(0,255)));
+            stroke(extra.strokeColor);
+            if(frameCount%120==0) console.log(lastY)
+            for(let i=0;i<this.data[dataPath[0]].length;i++){
+                var currentData = this.data[dataPath[0]][i];
+
                 var currTime = currentData.responseText.GetTime;
-                var path=[];
-                var coordX=i*5,coordY;
-                //x:this.ChartSizes[0]+ new Date(currTime).getSeconds(),
-                if(dataPath instanceof Array){
-                    coordY=base - parseFloat(currentData.responseText[dataPath[0]][dataPath[1]][dataPath[2]])*10000 +10500
+                var coordX=constrain(i*8+extra.phi,this.sizes.Chart.x+this.sizes.PlotChart.leftPadding,this.sizes.PlotChart.width-this.sizes.PlotChart.rightPadding ),coordY;
+
+                coordY= parseFloat(currentData[dataPath[1]][dataPath[2]][dataPath[3]][dataPath[4]])// * 1000000;
+                coordY = this.calculate("CalcY",{extra:extra,coordY:coordY, base:base});
+
+
+                if(frameCount%1200==0){
+                    console.log("lerp ",base+80-this.ChartSizes[3],base,
+                            "val: ",parseFloat(currentData[dataPath[1]][dataPath[2]][dataPath[3]][dataPath[4]]) ,
+                            "min max ",extra.min,extra.max,"res: ",coordY);
                 }
-                else throw 'dataPath must be Array';
-                //console.log(coord.y);
                 point(coordX,coordY);
                 //rect(x,y,12,12);
                 // rect(x,123,70,40);
             }
             pop();
         }
-        drawLineChart(dataPath){
-            var base = this.ChartSizes[1]+this.ChartSizes[3]-40;
+        drawLineChart(dataPath,base,extra){
+            if(dataPath instanceof Array == false) throw 'dataPath must be Array';
+            if(frameCount%120==0) console.log("base "+base)
+            if(this.data[dataPath[0]].length==0) return;
+
+            //console.log(this.data)
+            var lastY = parseFloat(this.data[dataPath[0]][this.data[dataPath[0]].length-1][dataPath[1]][dataPath[2]][dataPath[3]][dataPath[4]]) //* 1000000;
+            extra= this.calculate('MinMax',{extra:extra,lastY:lastY});
+            //if(frameCount%120==0) console.log(lastY)
+
             push();
-            strokeWeight(this.sizes.PlotChart.strokeWeight);
-            fill(this.colors.PlotChart.stroke);
-            stroke(this.colors.PlotChart.stroke);
-            for(let i=0;i<this.data.length;i++){
-                var currentData = this.data[i];
+            strokeWeight(1);
+            stroke(extra.strokeColor);
+            //stroke(this.colors.PlotChart.stroke);
+            for(let i=0;i<this.data[dataPath[0]].length;i++){
+                var currentData = this.data[dataPath[0]][i];
                 var currTime = currentData.responseText.GetTime;
-                var path=[];
-                var coordX=i*5,coordY;
-                //x:this.ChartSizes[0]+ new Date(currTime).getSeconds(),
-                if(dataPath instanceof Array){
-                    coordY=base - parseFloat(currentData.responseText[dataPath[0]][dataPath[1]][dataPath[2]])*10000 +10500
+                var coordX=constrain(i*8+extra.phi,this.sizes.Chart.x+this.sizes.PlotChart.leftPadding,this.sizes.PlotChart.width-this.sizes.PlotChart.rightPadding ),coordY;
+
+                coordY= parseFloat(currentData[dataPath[1]][dataPath[2]][dataPath[3]][dataPath[4]]) //* 1000000;
+                coordY = this.calculate("CalcY",{extra:extra,coordY:coordY, base:base});
+
+                if(frameCount%1200==0){
+                    console.log(dataPath," lerp ",base+80-this.ChartSizes[3],base,
+                            "val: ",parseFloat(currentData[dataPath[1]][dataPath[2]][dataPath[3]][dataPath[4]]) ,
+                            "min max ",extra.min,extra.max,"res: ",coordY);
                 }
-                else throw 'dataPath must be Array';
                 //console.log(coord.y);
                 line(coordX,coordY,coordX,base);
                 //rect(x,y,12,12);
@@ -115,11 +189,44 @@
             }
             pop();
         }
-        updateCharts(){
-           // console.log(this.data)
-            var currentData = this.data[this.data.length-1];
-            this.currency= currentData.responseText.Rate[4]['@attributes'].Symbol;
+        getAllSpecificData(dataPath){
+            console.log(this);
+            if(dataPath instanceof Array){
+                dataPath.type = 'host';
+                var th = this;
+                console.log(dataPath)
+               return th.getDataFromPath(dataPath,th).map(function (item) {
+               // return  item[dataPath[1]][dataPath[2]][dataPath[3]][dataPath[4]]
+                   dataPath.type = 'domain';
+                   return th.getDataFromPath(dataPath,item)
+                })
+            }
         }
+
+         getDataFromPath(dataPath, Obj){
+            if(dataPath instanceof Array == false ||  typeof dataPath != "object") throw 'dataPath must be Array';
+            if(dataPath.type == undefined) dataPath.type = 'domain';
+
+
+            if(dataPath.type == 'host'){
+                if(Obj == undefined) Obj=this;
+                console.log(Obj,dataPath);
+                        return Obj.data[dataPath[0]];
+            }
+
+            else if(dataPath.type == 'domain'){
+                if(Obj == undefined) throw "Object you want to take data must be defined";
+                switch (dataPath.length){
+                    case 2: return Obj[dataPath[1]];
+                    case 3: return Obj[dataPath[1]][dataPath[2]];
+                    case 4: return Obj[dataPath[1]][dataPath[2]][dataPath[3]];
+                    case 5: return Obj[dataPath[1]][dataPath[2]][dataPath[3]][dataPath[4]];
+                    case 6: return Obj[dataPath[1]][dataPath[2]][dataPath[3]][dataPath[4]][dataPath[5]];
+                    case 7: return Obj[dataPath[1]][dataPath[2]][dataPath[3]][dataPath[4]][dataPath[5]][dataPath[6]];
+                }
+            }
+        }
+
         AJAXcall(url='http://rates.fxcm.com/RatesXML'){
          var thisElasticChart = this;
          //console.log(thisElasticChart);
@@ -135,8 +242,8 @@
                //console.log(this);
                if (this.readyState == 4 && this.status == 200) {
                    response={responseText: JSON.parse(this.responseText), responseXML :  this.responseXML}
-                   thisElasticChart.data.push(response)
-                   thisElasticChart.updateCharts();
+                   thisElasticChart.data.AJAX.push(response)
+                   //thisElasticChart.updateCharts();
                }
                else{ response={statusText: this.statusText,status: this.status}; /*console.log(response);*/}
 
@@ -153,7 +260,27 @@
         createCanvas(800, 800);
 
         myChart = new ElasticChart();
-        myChart.ChartsToDraw[0] = {type: 'LineChart', dataPath: ['Rate',4,'Bid']}
+
+        for(let i=0;i<20;i++){
+            let pathObj = {
+                responseText: {
+                    user: {test: {rand: random(50)} }
+                }
+            };
+            myChart.data.given.push(pathObj);
+        }
+        myChart.ChartsToDraw[0] = {type: 'LineChart',
+            dataPaths: [['AJAX','responseText','Rate',4,'Bid'], ['AJAX','responseText','Rate',4,'Ask'],
+                ['AJAX','responseText','Rate',4,'Low'],['AJAX','responseText','Rate',4,'High']], extra: {min:0,max:0}}
+
+        myChart.ChartsToDraw[2] = {type: 'LineChart',
+            dataPaths: [['AJAX','responseText','Rate',5,'Bid'], ['AJAX','responseText','Rate',5,'Ask'],
+                ['AJAX','responseText','Rate',5,'Low'],['AJAX','responseText','Rate',5,'High']], extra: {min:0,max:0}}
+        myChart.ChartsToDraw[1] = {type: 'LineChart', dataPaths: [['given','responseText','user',"test",'rand']], extra: {
+            min: min(myChart.getAllSpecificData(['given','responseText','user',"test",'rand']))
+            ,max: max(myChart.getAllSpecificData(['given','responseText','user',"test",'rand']))
+        }}
+
     }
 
     function draw(){

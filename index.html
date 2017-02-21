@@ -17,6 +17,7 @@
             //Init components
             this.colors = this.defaultColors;
             this.sizes = this.defaultSizes;
+            this.options = this.defaultOptions;
 
             this.colors.extra = [];
 
@@ -72,6 +73,7 @@
                         ChartToDraw.extra.strokeColor = this.colors.extra[i];
                         ChartToDraw.extra.phi = i*2;
                         ChartToDraw.extra.count = chart;
+
                         this['draw'+this.ChartsToDraw[chart].type](dataPath,
                                 basePosition+this.ChartSizes[3]*chart, ChartToDraw.extra);
                         i++;
@@ -84,14 +86,21 @@
            // console.log(this);
             return {
                 background: color(100, 100, 105), ChartStroke: 1,
-                PlotChart: {stroke: color(80,200,200)}
+                PlotChart: {stroke: color(80,200,200)},
+                LineChart: {stroke: color(80,200,200)}
             }
         }
         get defaultSizes(){
             return{
                 Chart: {width: width, height: height/2,x:0,y:0, strokeWeight:2},
                 PlotChart: {strokeWeight: 1, leftPadding: 20, rightPadding: 20, width: width},
-                LineChart: {strokeWeight: 1, leftPadding: 20, rightPadding: 20}
+                LineChart: {strokeWeight: 1, leftPadding: 20, rightPadding: 20, width: width}
+            }
+        }
+        get defaultOptions(){
+            return{
+                PlotChart: {LastValueLine: {active: false,line: 'dashed', color: color(160,160,100)}},
+                LineChart: {LastValueLine: {active: true,line: 'dashed', color: color(160,160,100)}}
             }
         }
         get ChartSizes(){
@@ -118,50 +127,74 @@
         var coordY_To_MAX = (coordY-extra.min)/(extra.max-extra.min);
         coordY=lerp(base+80-this.ChartSizes[3],base,coordY_To_MAX);
 return coordY;
+    } else if(ThingToCalculate=='LastVal'){
+        let x1 = Arguments.x1, y1 = Arguments.y1, chartName = Arguments.chartName;
+        let y2 = y1,x2= this.sizes[chartName].width-this.sizes[chartName].rightPadding;
+        let rx = x2, ry = y1-5, rw = this.sizes[chartName].rightPadding*80/100 + this.sizes[chartName].leftPadding*80/100, rh = 10;
+        //return {x2:x2,y2:y2,rx:rx,ry:ry,rw:rw,rh:rh};
+        return [x2,y2,rx,ry,rw,rh]
     }
 
         }
         drawPlotChart(dataPath,base,extra){
             if(dataPath instanceof Array == false ||  typeof dataPath != "object") throw 'dataPath must be Array';
-            if(frameCount%120==0) console.log("base "+base)
+            //if(frameCount%120==0) console.log("base "+base)
             if(this.data[dataPath[0]].length==0) return;
 
-            var lastY = parseFloat(this.data[dataPath[0]][this.data[dataPath[0]].length-1][dataPath[1]][dataPath[2]][dataPath[3]][dataPath[4]]) //* 1000000;
+            dataPath.type='domain'
+            var lastY = parseFloat(this.getAllSpecificData(dataPath)[this.data[dataPath[0]].length-1])
             extra= this.calculate("MinMax",{extra:extra,lastY:lastY});
 
             push();
-            strokeWeight(2);
+            strokeWeight(extra.strokeWeight || this.sizes.Chart.strokeWeight);
            // fill(color(random(0,255),random(0,255),random(0,255)));
             stroke(extra.strokeColor);
-            if(frameCount%120==0) console.log(lastY)
             for(let i=0;i<this.data[dataPath[0]].length;i++){
                 var currentData = this.data[dataPath[0]][i];
 
                 var currTime = currentData.responseText.GetTime;
                 var coordX=constrain(i*8+extra.phi,this.sizes.Chart.x+this.sizes.PlotChart.leftPadding,this.sizes.PlotChart.width-this.sizes.PlotChart.rightPadding ),coordY;
 
-                coordY= parseFloat(currentData[dataPath[1]][dataPath[2]][dataPath[3]][dataPath[4]])// * 1000000;
+                coordY= parseFloat(this.getAllSpecificData(dataPath)[i])// * 1000000;
                 coordY = this.calculate("CalcY",{extra:extra,coordY:coordY, base:base});
 
 
-                if(frameCount%1200==0){
+                /*if(frameCount%1200==0){
                     console.log("lerp ",base+80-this.ChartSizes[3],base,
-                            "val: ",parseFloat(currentData[dataPath[1]][dataPath[2]][dataPath[3]][dataPath[4]]) ,
+                            "val: ",parseFloat(this.getAllSpecificData(dataPath)) ,
                             "min max ",extra.min,extra.max,"res: ",coordY);
-                }
+                }*/
                 point(coordX,coordY);
                 //rect(x,y,12,12);
                 // rect(x,123,70,40);
             }
             pop();
+
+            /*line for last value*/
+            if(this.options.PlotChart.LastValueLine.active==true){
+                let [lx2,ly2,rx,ry,rw,rh] =  this.calculate("LastVal",{x1: coordX, y1: coordY, chartName: 'LineChart'})
+                //let lx2 = LC.x2, ly2=LC.y2, rx=LC.rx, ry=LC.ry, rw=LC.rw, rh=LC.rh;
+                push();
+                stroke(this.options.LineChart.LastValueLine.color);
+                strokeWeight(3);
+                fill(color(100,100,100));
+                line(coordX,coordY,lx2,ly2);
+                rect(rx,ry,rw,rh);
+                text(coordY,textSize(coordY),ry)
+                pop();
+            }
         }
         drawLineChart(dataPath,base,extra){
             if(dataPath instanceof Array == false) throw 'dataPath must be Array';
-            if(frameCount%120==0) console.log("base "+base)
+            //if(frameCount%120==0)console.log("base ",base," extra: ",extra," path: ",dataPath)
+
+
             if(this.data[dataPath[0]].length==0) return;
 
             //console.log(this.data)
-            var lastY = parseFloat(this.data[dataPath[0]][this.data[dataPath[0]].length-1][dataPath[1]][dataPath[2]][dataPath[3]][dataPath[4]]) //* 1000000;
+            //var lastY = parseFloat(this.data[dataPath[0]][this.data[dataPath[0]].length-1][dataPath[1]][dataPath[2]][dataPath[3]][dataPath[4]]) //* 1000000;
+           dataPath.type='domain'
+            var lastY = parseFloat(this.getAllSpecificData(dataPath)[this.data[dataPath[0]].length-1])
             extra= this.calculate('MinMax',{extra:extra,lastY:lastY});
             //if(frameCount%120==0) console.log(lastY)
 
@@ -169,32 +202,74 @@ return coordY;
             strokeWeight(1);
             stroke(extra.strokeColor);
             //stroke(this.colors.PlotChart.stroke);
-            for(let i=0;i<this.data[dataPath[0]].length;i++){
+            let barsDist = 28,incrementAmount=1,
+             LastXCoord = (this.data[dataPath[0]].length-1)*barsDist+extra.phi,
+                    ChartWidth = this.sizes.LineChart.width;
+            var barsAmount = ChartWidth/barsDist;
+
+            if(LastXCoord>ChartWidth){
+                incrementAmount= Math.ceil( this.data[dataPath[0]].length/barsAmount);
+            }
+
+
+            /*Check if x coordinate of last data extends window width*/
+            /*if(frameCount%120==0)*/ console.log("LastXCoord "+LastXCoord,ChartWidth,
+            "barsAmount ",barsAmount,"incrementAmount ",incrementAmount
+            )
+            /*if(LastXCoord>ChartWidth){
+                if(frameCount%120==0) console.log("barsDist "+barsDist)
+                if(LastXCoord>this.sizes.LineChart.width)incrementAmount=2
+                        }*/
+            for(let i=0,ix=0;i<this.data[dataPath[0]].length;i+=incrementAmount,ix++){
                 var currentData = this.data[dataPath[0]][i];
                 var currTime = currentData.responseText.GetTime;
-                var coordX=constrain(i*8+extra.phi,this.sizes.Chart.x+this.sizes.PlotChart.leftPadding,this.sizes.PlotChart.width-this.sizes.PlotChart.rightPadding ),coordY;
+                var coordX=constrain(ix*barsDist+extra.phi,this.sizes.Chart.x+this.sizes.PlotChart.leftPadding,this.sizes.LineChart.width-this.sizes.PlotChart.rightPadding);
 
-                coordY= parseFloat(currentData[dataPath[1]][dataPath[2]][dataPath[3]][dataPath[4]]) //* 1000000;
-                coordY = this.calculate("CalcY",{extra:extra,coordY:coordY, base:base});
+               var valueY= parseFloat(this.getAllSpecificData(dataPath)[i]) //* 1000000;
+               var coordY = this.calculate("CalcY",{extra:extra,coordY:valueY, base:base});
 
-                if(frameCount%1200==0){
+               /* if(frameCount%1200==0){
                     console.log(dataPath," lerp ",base+80-this.ChartSizes[3],base,
-                            "val: ",parseFloat(currentData[dataPath[1]][dataPath[2]][dataPath[3]][dataPath[4]]) ,
+                            "val: ",parseFloat(this.getAllSpecificData(dataPath)) ,
                             "min max ",extra.min,extra.max,"res: ",coordY);
-                }
+                }*/
                 //console.log(coord.y);
+                /*line for chart*/
+                push();
+                strokeWeight(1);
+                stroke(this.colors.extra[13]);
                 line(coordX,coordY,coordX,base);
-                //rect(x,y,12,12);
-                // rect(x,123,70,40);
+                pop();
+
+                //value on head
+                text(valueY.toFixed(5),coordX,coordY);
             }
             pop();
+
+            /*line for last value*/
+            if(this.options.LineChart.LastValueLine.active==true){
+                let [lx2,ly2,rx,ry,rw,rh] =  this.calculate("LastVal",{x1: coordX, y1: coordY, chartName: 'LineChart'});
+                //let lx2 = LC.x2, ly2=LC.y2, rx=LC.rx, ry=LC.ry, rw=LC.rw, rh=LC.rh;
+                push();
+                stroke(this.options.LineChart.LastValueLine.color);
+                strokeWeight(3);
+                fill(color(100,100,100));
+                line(coordX,coordY,lx2,ly2);
+                rect(rx-10,ry,textWidth(coordY)+rw,rh+5);
+                stroke(color(200,0,0))
+                fill(color(0,0,0))
+                textSize(rh);
+                text(coordY,rx,ry+10); //later it will be real value
+                pop();
+            }
+
         }
         getAllSpecificData(dataPath){
-            console.log(this);
+           // console.log(this);
             if(dataPath instanceof Array){
                 dataPath.type = 'host';
                 var th = this;
-                console.log(dataPath)
+                //console.log(dataPath)
                return th.getDataFromPath(dataPath,th).map(function (item) {
                // return  item[dataPath[1]][dataPath[2]][dataPath[3]][dataPath[4]]
                    dataPath.type = 'domain';
@@ -207,10 +282,10 @@ return coordY;
             if(dataPath instanceof Array == false ||  typeof dataPath != "object") throw 'dataPath must be Array';
             if(dataPath.type == undefined) dataPath.type = 'domain';
 
-
+             //console.log(Obj,dataPath);
             if(dataPath.type == 'host'){
                 if(Obj == undefined) Obj=this;
-                console.log(Obj,dataPath);
+
                         return Obj.data[dataPath[0]];
             }
 
@@ -264,21 +339,32 @@ return coordY;
         for(let i=0;i<20;i++){
             let pathObj = {
                 responseText: {
-                    user: {test: {rand: random(50)} }
+                    user: {test: {rand: random(14)} },
+                    other: random(10)
                 }
             };
             myChart.data.given.push(pathObj);
         }
-        myChart.ChartsToDraw[0] = {type: 'LineChart',
+        myChart.ChartsToDraw[0] = {type: 'PlotChart',
             dataPaths: [['AJAX','responseText','Rate',4,'Bid'], ['AJAX','responseText','Rate',4,'Ask'],
                 ['AJAX','responseText','Rate',4,'Low'],['AJAX','responseText','Rate',4,'High']], extra: {min:0,max:0}}
 
         myChart.ChartsToDraw[2] = {type: 'LineChart',
             dataPaths: [['AJAX','responseText','Rate',5,'Bid'], ['AJAX','responseText','Rate',5,'Ask'],
                 ['AJAX','responseText','Rate',5,'Low'],['AJAX','responseText','Rate',5,'High']], extra: {min:0,max:0}}
-        myChart.ChartsToDraw[1] = {type: 'LineChart', dataPaths: [['given','responseText','user',"test",'rand']], extra: {
+
+        /*myChart.ChartsToDraw[1] = {type: 'PlotChart', dataPaths: [['given','responseText','user',"test",'rand']], extra: {
             min: min(myChart.getAllSpecificData(['given','responseText','user',"test",'rand']))
             ,max: max(myChart.getAllSpecificData(['given','responseText','user',"test",'rand']))
+        }}*/
+        myChart.ChartsToDraw[1] = {type: 'PlotChart', dataPaths: [['given','responseText','user',"test",'rand']], extra: {
+            min: min(myChart.getAllSpecificData(['given','responseText','user',"test",'rand']))
+            ,max: max(myChart.getAllSpecificData(['given','responseText','user',"test",'rand'])), strokeWeight: 14
+        }}
+        myChart.ChartsToDraw[3] = {type: 'LineChart', dataPaths: [['given','responseText','other']], extra: {
+            min: min(myChart.getAllSpecificData(['given','responseText','other']))
+            ,max: max(myChart.getAllSpecificData(['given','responseText','other']))
+
         }}
 
     }
@@ -292,7 +378,15 @@ return coordY;
         rect(20,50,30,50);
         pop()
 
-
+if(frameCount%20==0){
+    myChart.data.given.push({
+        responseText: {
+            user: {test: {rand: random(5)}
+            },
+            other: random(5)
+        }
+    });
+}
 
     }
 
